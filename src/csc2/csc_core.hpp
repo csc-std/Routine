@@ -548,7 +548,9 @@ template <class UNIT1>
 using IS_CLASS = ENUMAS<BOOL ,U::ENUMID<(std::is_class<UNIT1>::value)>> ;
 
 template <class UNIT1>
-using IS_NULLOPT = ENUMAS<BOOL ,U::ENUMID<(std::is_nothrow_default_constructible<UNIT1>::value)>> ;
+using IS_DEFAULT = ENUM_ALL<
+	ENUMAS<BOOL ,U::ENUMID<(std::is_nothrow_default_constructible<UNIT1>::value)>> ,
+	ENUMAS<BOOL ,U::ENUMID<(std::is_nothrow_destructible<UNIT1>::value)>>> ;
 
 template <class UNIT1>
 using IS_ZEROIZE = ENUMAS<BOOL ,U::ENUMID<(std::is_trivial<UNIT1>::value)>> ;
@@ -556,7 +558,9 @@ using IS_ZEROIZE = ENUMAS<BOOL ,U::ENUMID<(std::is_trivial<UNIT1>::value)>> ;
 template <class UNIT1>
 using IS_CLONEABLE = ENUM_ALL<
 	ENUMAS<BOOL ,U::ENUMID<(std::is_copy_constructible<UNIT1>::value)>> ,
-	ENUMAS<BOOL ,U::ENUMID<(std::is_copy_assignable<UNIT1>::value)>>> ;
+	ENUMAS<BOOL ,U::ENUMID<(std::is_copy_assignable<UNIT1>::value)>> ,
+	ENUMAS<BOOL ,U::ENUMID<(std::is_nothrow_move_constructible<UNIT1>::value)>> ,
+	ENUMAS<BOOL ,U::ENUMID<(std::is_nothrow_move_assignable<UNIT1>::value)>>> ;
 
 struct Interface {
 	implicit Interface () = default ;
@@ -1114,21 +1118,13 @@ struct FUNCTION_zeroize {
 static constexpr auto zeroize = FUNCTION_zeroize () ;
 
 struct FUNCTION_create {
-	template <class ARG1 ,class = ENABLE<IS_NULLOPT<REMOVE_TEMP<REMOVE_ALL<ARG1>>>>>
+	template <class ARG1>
 	inline void operator() (XREF<ARG1> thiz_) const noexcept {
 		using R1X = REMOVE_ALL<ARG1> ;
 		require (IS_TEMP<R1X>) ;
 		using R2X = REMOVE_TEMP<R1X> ;
+		require (IS_DEFAULT<R2X>) ;
 		new (&unsafe_deref (thiz_)) R2X () ;
-		barrier () ;
-	}
-
-	template <class ARG1 ,class...ARGS>
-	inline void operator() (XREF<ARG1> thiz_ ,XREF<ARGS>...objs) const noexcept {
-		using R1X = REMOVE_ALL<ARG1> ;
-		require (IS_TEMP<R1X>) ;
-		using R2X = REMOVE_TEMP<R1X> ;
-		new (&unsafe_deref (thiz_)) R2X (forward[TYPEAS<ARGS>::id] (objs)...) ;
 		barrier () ;
 	}
 } ;
@@ -1544,8 +1540,9 @@ trait CELL_HELP<UNIT1 ,REQUIRE<IS_CLONEABLE<UNIT1>>> {
 		template <class...ARGS>
 		imports Cell make (XREF<ARGS>...objs) {
 			Cell ret ;
-			create (ret.mHolder ,UNIT1 (forward[TYPEAS<ARGS>::id] (objs)...)) ;
+			create (ret.mHolder) ;
 			ret.mExist = TRUE ;
+			swap (ret.m_fake () ,UNIT1 (forward[TYPEAS<ARGS>::id] (objs)...)) ;
 			return move (ret) ;
 		}
 
@@ -2020,7 +2017,7 @@ trait AUTO_HELP<ALWAYS> {
 		template <class ARG1 ,class = ENABLE<ENUM_ALL<ENUM_NOT<IS_SAME<ARG1 ,Auto>> ,ENUM_NOT<IS_PLACEHOLDER<ARG1>>>>>
 		implicit Auto (XREF<ARG1> that) noexcept :Auto (PH0) {
 			using R1X = REMOVE_ALL<ARG1> ;
-			require (IS_NULLOPT<R1X>) ;
+			require (IS_DEFAULT<R1X>) ;
 			using R2X = typename AUTO_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
 			create (unsafe_cast[TYPEAS<TEMP<R2X>>::id] (mHolder)) ;
 			mExist = TRUE ;
@@ -2047,9 +2044,9 @@ trait AUTO_HELP<ALWAYS> {
 		implicit void operator= (RREF<Auto>) = delete ;
 
 		template <class ARG1>
-		REMOVE_ALL<ARG1> fetch (XREF<ARG1> id) rightvalue noexcept {
+		REMOVE_ALL<ARG1> poll (XREF<ARG1> id) rightvalue noexcept {
 			using R1X = REMOVE_ALL<ARG1> ;
-			require (IS_NULLOPT<R1X>) ;
+			require (IS_DEFAULT<R1X>) ;
 			using R2X = typename AUTO_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
 			require (ENUM_COMPR_LTEQ<SIZE_OF<R2X> ,SIZE_OF<FakeHolder>>) ;
 			require (ENUM_COMPR_LTEQ<ALIGN_OF<R2X> ,ALIGN_OF<FakeHolder>>) ;
@@ -2080,7 +2077,7 @@ trait AUTO_HELP<ALWAYS> {
 } ;
 
 template <class UNIT1>
-trait AUTO_IMPLHOLDER_HELP<UNIT1 ,REQUIRE<IS_NULLOPT<UNIT1>>> {
+trait AUTO_IMPLHOLDER_HELP<UNIT1 ,REQUIRE<IS_DEFAULT<UNIT1>>> {
 	using Holder = typename AUTO_HELP<ALWAYS>::AutoHolder ;
 
 	class ImplHolder :public Holder {
@@ -2309,12 +2306,6 @@ trait CLAZZ_HELP<ALWAYS> {
 			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id) ;
 		}
 
-		imports CREF<Clazz> nullopt () {
-			return memorize ([&] () {
-				return Clazz () ;
-			}) ;
-		}
-
 		LENGTH type_size () const {
 			if (mPointer == NULL)
 				return ZERO ;
@@ -2450,10 +2441,10 @@ trait EXCEPTION_HELP<ALWAYS> {
 		implicit Exception () = default ;
 
 		template <class ARG1>
-		explicit Exception (XREF<ARG1> id) noexcept {
+		explicit Exception (XREF<ARG1> id ,CREF<Slice<STR>> what_) noexcept {
 			using R1X = REMOVE_ALL<ARG1> ;
 			using R2X = typename EXCEPTION_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
-			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id ,Slice<STR>::nullopt ()) ;
+			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id ,what_) ;
 		}
 
 		CREF<Slice<STR>> what () const leftvalue noexcept {
@@ -2471,7 +2462,7 @@ trait EXCEPTION_HELP<ALWAYS> {
 
 template <class UNIT1>
 trait EXCEPTION_IMPLHOLDER_HELP<UNIT1 ,ALWAYS> {
-	using Holder = typename EXCEPTION_HELP<ALWAYS>::ExceptionHolder ;
+	using Holder = typename EXCEPTION_HELP<UNIT1 ,ALWAYS>::ExceptionHolder ;
 
 	class ImplHolder :public Holder {
 	private:
@@ -2481,8 +2472,6 @@ trait EXCEPTION_IMPLHOLDER_HELP<UNIT1 ,ALWAYS> {
 		implicit ImplHolder () = delete ;
 
 		explicit ImplHolder (CREF<Slice<STR>> what_) :mWhat (move (what_)) {}
-
-		explicit ImplHolder (RREF<Slice<STR>> what_) :mWhat (move (what_)) {}
 
 		CREF<Slice<STR>> what () const leftvalue override {
 			return mWhat ;
@@ -2500,6 +2489,7 @@ trait WATCH_HELP ;
 template <class UNIT1>
 trait WATCH_HELP<UNIT1 ,ALWAYS> {
 	struct WATCH {
+		Slice<STR> mName ;
 		PTR<CREF<UNIT1>> mPointer ;
 		Clazz mClazz ;
 	} ;
@@ -2514,10 +2504,11 @@ template <class UNIT1>
 trait FUNCTION_debug_watch_HELP<UNIT1 ,REQUIRE<MACRO_DEBUG<UNIT1>>> {
 	struct FUNCTION_debug_watch {
 		template <class ARG1>
-		inline void operator() (XREF<ARG1> expr) const {
+		inline void operator() (CREF<Slice<STR>> name ,XREF<ARG1> expr) const {
 			using R1X = REMOVE_ALL<ARG1> ;
 			using R2X = typename U::WATCH_HELP<R1X ,ALWAYS>::WATCH ;
 			static R2X tmp ;
+			tmp.mName = name ;
 			tmp.mPointer = &expr ;
 			tmp.mClazz = Clazz (TYPEAS<R1X>::id) ;
 		}
@@ -2528,10 +2519,11 @@ template <class UNIT1>
 trait FUNCTION_debug_watch_HELP<UNIT1 ,REQUIRE<MACRO_UNITTEST<UNIT1>>> {
 	struct FUNCTION_debug_watch {
 		template <class ARG1>
-		inline void operator() (XREF<ARG1> expr) const {
+		inline void operator() (CREF<Slice<STR>> name ,XREF<ARG1> expr) const {
 			using R1X = REMOVE_ALL<ARG1> ;
 			using R2X = typename U::WATCH_HELP<R1X ,ALWAYS>::WATCH ;
 			static R2X tmp ;
+			tmp.mName = name ;
 			tmp.mPointer = &expr ;
 			tmp.mClazz = Clazz (TYPEAS<R1X>::id) ;
 		}
@@ -2542,7 +2534,7 @@ template <class UNIT1>
 trait FUNCTION_debug_watch_HELP<UNIT1 ,REQUIRE<MACRO_RELEASE<UNIT1>>> {
 	struct FUNCTION_debug_watch {
 		template <class ARG1>
-		inline void operator() (XREF<ARG1> expr) const {
+		inline void operator() (CREF<Slice<STR>> name ,XREF<ARG1> expr) const {
 			noop () ;
 		}
 	} ;
@@ -2551,10 +2543,10 @@ trait FUNCTION_debug_watch_HELP<UNIT1 ,REQUIRE<MACRO_RELEASE<UNIT1>>> {
 
 struct FUNCTION_debug_watch {
 	template <class ARG1>
-	inline void operator() (XREF<ARG1> expr) const {
+	inline void operator() (CREF<Slice<STR>> name ,XREF<ARG1> expr) const {
 		using R1X = typename U::FUNCTION_debug_watch_HELP<void ,ALWAYS>::FUNCTION_debug_watch ;
 		static constexpr auto M_INVOKE = R1X () ;
-		return M_INVOKE (expr) ;
+		return M_INVOKE (name ,expr) ;
 	}
 } ;
 
