@@ -965,8 +965,8 @@ struct FUNCTION_unsafe_cast {
 static constexpr auto unsafe_cast = FUNCTION_unsafe_cast () ;
 
 struct FUNCTION_unsafe_pointer {
-	inline CREF<TEMP<void>> operator() (CREF<LENGTH> addr) const noexcept {
-		const auto r1x = reinterpret_cast<PTR<CREF<TEMP<void>>>> (addr) ;
+	inline VREF<TEMP<void>> operator() (CREF<LENGTH> addr) const noexcept {
+		const auto r1x = reinterpret_cast<PTR<VREF<TEMP<void>>>> (addr) ;
 		assert (r1x != NULL) ;
 		return (*r1x) ;
 	}
@@ -1074,7 +1074,7 @@ struct FUNCTION_move {
 	}
 
 	template <class ARG1 ,class = ENABLE<IS_CONSTANT<ARG1>>>
-	inline REMOVE_ALL<ARG1> operator() (XREF<ARG1> arg1) const noexcept {
+	inline REMOVE_ALL<ARG1> operator() (XREF<ARG1> arg1) const {
 		using R1X = REMOVE_ALL<ARG1> ;
 		require (IS_CLONEABLE<R1X>) ;
 		return keep[TYPEAS<CREF<R1X>>::id] (arg1) ;
@@ -1118,13 +1118,22 @@ struct FUNCTION_zeroize {
 static constexpr auto zeroize = FUNCTION_zeroize () ;
 
 struct FUNCTION_create {
-	template <class ARG1>
+	template <class ARG1 ,class = ENABLE<IS_DEFAULT<REMOVE_TEMP<REMOVE_ALL<ARG1>>>>>
 	inline void operator() (XREF<ARG1> thiz_) const noexcept {
 		using R1X = REMOVE_ALL<ARG1> ;
 		require (IS_TEMP<R1X>) ;
 		using R2X = REMOVE_TEMP<R1X> ;
 		require (IS_DEFAULT<R2X>) ;
 		new (&unsafe_deref (thiz_)) R2X () ;
+		barrier () ;
+	}
+
+	template <class ARG1 ,class...ARGS>
+	inline void operator() (XREF<ARG1> thiz_ ,XREF<ARGS>...objs) const {
+		using R1X = REMOVE_ALL<ARG1> ;
+		require (IS_TEMP<R1X>) ;
+		using R2X = REMOVE_TEMP<R1X> ;
+		new (&unsafe_deref (thiz_)) R2X (forward[TYPEAS<ARGS>::id] (objs)...) ;
 		barrier () ;
 	}
 } ;
@@ -1143,63 +1152,6 @@ struct FUNCTION_destroy {
 } ;
 
 static constexpr auto destroy = FUNCTION_destroy () ;
-
-namespace U {
-template <class...>
-trait MAKER_HELP ;
-
-template <class...>
-trait MAKER_IMPLHOLDER_HELP ;
-
-template <>
-trait MAKER_HELP<ALWAYS> {
-	struct MakerHolder :public Interface {
-		virtual void friend_create (VREF<TEMP<void>> thiz_) const = 0 ;
-		virtual void friend_destroy (VREF<TEMP<void>> thiz_) const = 0 ;
-		virtual LENGTH type_offset () const = 0 ;
-		virtual LENGTH type_size () const = 0 ;
-		virtual LENGTH type_align () const = 0 ;
-	} ;
-} ;
-
-template <class UNIT1 ,class UNIT2>
-trait MAKER_IMPLHOLDER_HELP<UNIT1 ,UNIT2 ,ALWAYS> {
-	using Holder = typename MAKER_HELP<ALWAYS>::MakerHolder ;
-
-	class MakerImplHolder :public Holder {
-	public:
-		void friend_create (VREF<TEMP<void>> thiz_) const override {
-			create (unsafe_cast[TYPEAS<TEMP<UNIT2>>::id] (thiz_)) ;
-			barrier () ;
-		}
-
-		void friend_destroy (VREF<TEMP<void>> thiz_) const override {
-			destroy (unsafe_cast[TYPEAS<TEMP<UNIT2>>::id] (thiz_)) ;
-			barrier () ;
-		}
-
-		LENGTH type_offset () const override {
-			static TEMP<UNIT2> tmp ;
-			const auto r1x = address (keep[TYPEAS<CREF<UNIT1>>::id] (unsafe_deref (tmp))) ;
-			const auto r2x = address (tmp) ;
-			return r1x - r2x ;
-		}
-
-		LENGTH type_size () const override {
-			return SIZE_OF<UNIT2>::value ;
-		}
-
-		LENGTH type_align () const override {
-			return ALIGN_OF<UNIT2>::value ;
-		}
-	} ;
-} ;
-} ;
-
-using MakerHolder = typename U::MAKER_HELP<ALWAYS>::MakerHolder ;
-
-template <class UNIT1 ,class UNIT2>
-using MakerImplHolder = typename U::MAKER_IMPLHOLDER_HELP<UNIT1 ,UNIT2 ,ALWAYS>::MakerImplHolder ;
 
 struct FUNCTION_bad {
 	template <class ARG1>
@@ -1540,9 +1492,8 @@ trait CELL_HELP<UNIT1 ,REQUIRE<IS_CLONEABLE<UNIT1>>> {
 		template <class...ARGS>
 		imports Cell make (XREF<ARGS>...objs) {
 			Cell ret ;
-			create (ret.mHolder) ;
+			create (ret.mHolder ,forward[TYPEAS<ARGS>::id] (objs)...) ;
 			ret.mExist = TRUE ;
-			swap (ret.m_fake () ,UNIT1 (forward[TYPEAS<ARGS>::id] (objs)...)) ;
 			return move (ret) ;
 		}
 
@@ -1810,19 +1761,7 @@ trait RC_HELP<UNIT1 ,ALWAYS> {
 			RC ret ;
 			ret.mPointer = R2X::create (forward[TYPEAS<ARGS>::id] (objs)...) ;
 			const auto r1x = ret.mPointer->increase () ;
-			assert (r1x == 1) ;
-			return move (ret) ;
-		}
-
-		template <class ARG1 ,class...ARGS>
-		imports RC keep (XREF<ARG1> id ,XREF<ARGS>...objs) {
-			using R1X = REMOVE_ALL<ARG1> ;
-			using R2X = typename RC_PUREHOLDER_HELP<UNIT1 ,R1X ,ALWAYS>::PureHolder ;
-			require (IS_EXTEND<UNIT1 ,R1X>) ;
-			RC ret ;
-			ret.mPointer = R2X::create (forward[TYPEAS<ARGS>::id] (objs)...) ;
-			const auto r1x = ret.mPointer->increase () ;
-			assert (r1x == NONE) ;
+			assert (r1x == IDEN) ;
 			return move (ret) ;
 		}
 
@@ -1831,7 +1770,7 @@ trait RC_HELP<UNIT1 ,ALWAYS> {
 				return ;
 			if ifswitch (TRUE) {
 				const auto r1x = mPointer->decrease () ;
-				if (r1x != 0)
+				if (r1x != ZERO)
 					discard ;
 				mPointer->destroy () ;
 			}
@@ -2044,7 +1983,7 @@ trait AUTO_HELP<ALWAYS> {
 		implicit void operator= (RREF<Auto>) = delete ;
 
 		template <class ARG1>
-		REMOVE_ALL<ARG1> poll (XREF<ARG1> id) rightvalue noexcept {
+		REMOVE_ALL<ARG1> cast (XREF<ARG1> id) rightvalue noexcept {
 			using R1X = REMOVE_ALL<ARG1> ;
 			require (IS_DEFAULT<R1X>) ;
 			using R2X = typename AUTO_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
@@ -2067,10 +2006,6 @@ trait AUTO_HELP<ALWAYS> {
 		}
 
 		VREF<AutoHolder> m_fake () leftvalue {
-			return unsafe_deref (mHolder) ;
-		}
-
-		CREF<AutoHolder> m_fake () const leftvalue {
 			return unsafe_deref (mHolder) ;
 		}
 	} ;
@@ -2139,7 +2074,9 @@ trait SLICE_HELP<UNIT1 ,REQUIRE<IS_STR<UNIT1>>> {
 			require (ENUM_COMPR_LTEQ<R1X ,MAX_SLICE_SIZE>) ;
 #ifndef __CSC_COMPILER_GNUC__
 			using R2X = typename SLICE_IMPLHOLDER_HELP<UNIT1 ,R1X ,ALWAYS>::ImplHolder ;
-			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id ,texts...) ;
+			mPointer = memorize ([&] () {
+				return RC<Holder>::make (TYPEAS<R2X>::id ,texts...) ;
+			}) ;
 #endif
 		}
 
@@ -2303,7 +2240,9 @@ trait CLAZZ_HELP<ALWAYS> {
 		explicit Clazz (XREF<ARG1> id) {
 			using R1X = REMOVE_ALL<ARG1> ;
 			using R2X = typename CLAZZ_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
-			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id) ;
+			mPointer = memorize ([&] () {
+				return RC<Holder>::make (TYPEAS<R2X>::id) ;
+			}) ;
 		}
 
 		LENGTH type_size () const {
@@ -2444,7 +2383,9 @@ trait EXCEPTION_HELP<ALWAYS> {
 		explicit Exception (XREF<ARG1> id ,CREF<Slice<STR>> what_) noexcept {
 			using R1X = REMOVE_ALL<ARG1> ;
 			using R2X = typename EXCEPTION_IMPLHOLDER_HELP<R1X ,ALWAYS>::ImplHolder ;
-			mPointer = RC<Holder>::keep (TYPEAS<R2X>::id ,what_) ;
+			mPointer = memorize ([&] () {
+				return RC<Holder>::make (TYPEAS<R2X>::id ,what_) ;
+			}) ;
 		}
 
 		CREF<Slice<STR>> what () const leftvalue noexcept {
