@@ -14,17 +14,28 @@ imports Auto get_float () {
 imports Auto get_string () {
 	return slice ("test" ,"2") ;
 }
+
+struct A :public Interface {
+	virtual void test () = 0 ;
+} ;
+
+struct ImplA :public A {
+	void test () override {
+		const auto r1x = VAR32 (get_int ().cast (TYPEAS<VAR32>::id)) ;
+		assert (r1x == VAR32 (2)) ;
+		const auto r2x = SINGLE (get_float ().cast (TYPEAS<SINGLE>::id)) ;
+		assert (r2x == SINGLE (3.1)) ;
+		const auto r3x = Slice<STR> (get_string ().cast (TYPEAS<Slice<STR>>::id)) ;
+		assert (r3x == slice ("test" ,"2")) ;
+	}
+} ;
 } ;
 
 #ifdef __CSC_TARGET_EXE__
 exports int main () noexcept {
 	using namespace UNITTEST ;
-	const auto r1x = VAR32 (get_int ().cast (TYPEAS<VAR32>::id)) ;
-	assert (r1x == VAR32 (2)) ;
-	const auto r2x = SINGLE (get_float ().cast (TYPEAS<SINGLE>::id)) ;
-	assert (r2x == SINGLE (3.1)) ;
-	const auto r3x = Slice<STR> (get_string ().cast (TYPEAS<Slice<STR>>::id)) ;
-	assert (r3x == slice ("test" ,"2")) ;
+	auto rax = Box<A>::make (TYPEAS<ImplA>::id) ;
+	rax->test () ;
 	return 0 ;
 }
 #endif
