@@ -1649,7 +1649,6 @@ trait BOX_HELP<UNIT1 ,REQUIRE<IS_INTERFACE<UNIT1>>> {
 			ret.mPointer = R2X::create () ;
 			const auto r1x = recreate (TYPEAS<R1X>::id ,forward[TYPEAS<ARGS>::id] (objs)...) ;
 			ret.mPointer->initialize (unsafe_cast[TYPEAS<TEMP<void>>::id] (r1x)) ;
-			barrier () ;
 			return move (ret) ;
 		}
 
@@ -1731,7 +1730,8 @@ trait BOX_IMPLHOLDER_HELP<UNIT1 ,UNIT2 ,ALWAYS> {
 		implicit ImplHolder () = default ;
 
 		imports PTR<VREF<Holder>> create () {
-			const auto r1x = ALIGN_OF<ImplHolder>::value + SIZE_OF<ImplHolder>::value ;
+			const auto r4x = max (ALIGN_OF<ImplHolder>::value - ALIGN_OF<std::max_align_t>::value ,ZERO) ;
+			const auto r1x = r4x + SIZE_OF<ImplHolder>::value ;
 			const auto r2x = LENGTH (operator new (r1x ,std::nothrow)) ;
 			assert (r2x != ZERO) ;
 			const auto r3x = alignto (r2x ,ALIGN_OF<ImplHolder>::value) ;
@@ -1817,7 +1817,6 @@ trait RC_HELP<UNIT1 ,ALWAYS> {
 			ret.mPointer = R2X::create () ;
 			const auto r1x = recreate (TYPEAS<R1X>::id ,forward[TYPEAS<ARGS>::id] (objs)...) ;
 			ret.mPointer->initialize (unsafe_cast[TYPEAS<TEMP<void>>::id] (r1x)) ;
-			barrier () ;
 			const auto r2x = ret.mPointer->increase () ;
 			assert (r2x == 1) ;
 			return move (ret) ;
@@ -1908,7 +1907,8 @@ trait RC_IMPLHOLDER_HELP<UNIT1 ,UNIT2 ,ALWAYS> {
 		implicit ImplHolder () = default ;
 
 		imports PTR<VREF<Holder>> create () {
-			const auto r1x = ALIGN_OF<ImplHolder>::value + SIZE_OF<ImplHolder>::value ;
+			const auto r4x = max (ALIGN_OF<ImplHolder>::value - ALIGN_OF<std::max_align_t>::value ,ZERO) ;
+			const auto r1x = r4x + SIZE_OF<ImplHolder>::value ;
 			const auto r2x = LENGTH (operator new (r1x ,std::nothrow)) ;
 			assert (r2x != ZERO) ;
 			const auto r3x = alignto (r2x ,ALIGN_OF<ImplHolder>::value) ;
@@ -1972,6 +1972,7 @@ trait RC_PUREHOLDER_HELP<UNIT1 ,UNIT2 ,UUID ,ALWAYS> {
 			auto &&ret = unsafe_deref (where_) ;
 			CSC::create (unsafe_deptr (ret)) ;
 			barrier () ;
+			ret.mExist = FALSE ;
 			return &ret ;
 		}
 
@@ -2021,6 +2022,7 @@ template <>
 trait AUTO_HELP<ALWAYS> {
 	struct AutoHolder :public Interface {
 		virtual void initialize (CREF<TEMP<void>> value_) = 0 ;
+		virtual void friend_swap (VREF<TEMP<void>> value_) = 0 ;
 		virtual void destroy () = 0 ;
 		virtual FLAG type_cabi () const = 0 ;
 	} ;
@@ -2035,6 +2037,7 @@ trait AUTO_HELP<ALWAYS> {
 
 	public:
 		void initialize (CREF<TEMP<void>> value_) override ;
+		void friend_swap (VREF<TEMP<void>> value_) override ;
 		void destroy () override ;
 		FLAG type_cabi () const override ;
 	} ;
@@ -2060,7 +2063,6 @@ trait AUTO_HELP<ALWAYS> {
 			mExist = TRUE ;
 			const auto r2x = recreate (TYPEAS<R1X>::id ,forward[TYPEAS<ARG1>::id] (that)) ;
 			m_fake ().initialize (unsafe_cast[TYPEAS<TEMP<void>>::id] (r2x)) ;
-			barrier () ;
 		}
 
 		implicit ~Auto () noexcept {
@@ -2089,7 +2091,7 @@ trait AUTO_HELP<ALWAYS> {
 			const auto r2x = operator_cabi (id) ;
 			assert (r1x == r2x) ;
 			R1X ret ;
-			m_fake ().initialize (unsafe_cast[TYPEAS<TEMP<void>>::id] (unsafe_deptr (ret))) ;
+			m_fake ().friend_swap (unsafe_cast[TYPEAS<TEMP<void>>::id] (unsafe_deptr (ret))) ;
 			barrier () ;
 			return move (ret) ;
 		}
@@ -2130,6 +2132,11 @@ trait AUTO_IMPLHOLDER_HELP<UNIT1 ,ALWAYS> {
 			assert (ifnot (mExist)) ;
 			mValue = unsafe_cast[TYPEAS<TEMP<UNIT1>>::id] (value_) ;
 			mExist = TRUE ;
+		}
+		
+		void friend_swap (VREF<TEMP<void>> value_) override {
+			assert (mExist) ;
+			swap (mValue ,unsafe_cast[TYPEAS<TEMP<UNIT1>>::id] (value_)) ;
 		}
 
 		void destroy () override {
