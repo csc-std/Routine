@@ -579,6 +579,18 @@ using IS_INTERFACE = ENUM_ALL<
 template <class BASE ,class DERIVED>
 using IS_EXTEND = ENUMAS<BOOL ,U::ENUMID<(std::is_base_of<BASE ,DERIVED>::value)>> ;
 
+struct Proxy {
+	implicit Proxy () = delete ;
+	implicit ~Proxy () = delete ;
+	implicit Proxy (CREF<Proxy>) = delete ;
+	inline VREF<Proxy> operator= (CREF<Proxy>) = delete ;
+	implicit Proxy (RREF<Proxy>) = delete ;
+	inline VREF<Proxy> operator= (RREF<Proxy>) = delete ;
+} ;
+
+template <class UNIT1>
+using IS_STORAGE = ENUMAS<BOOL ,U::ENUMID<(std::is_array<UNIT1>::value)>> ;
+
 template <class UNIT1>
 using IS_FUNCTION = ENUMAS<BOOL ,U::ENUMID<(std::is_function<UNIT1>::value)>> ;
 
@@ -637,9 +649,6 @@ using IS_BYTE = ENUM_ANY<
 	IS_SAME<UNIT1 ,MEGA>> ;
 
 template <class UNIT1>
-using IS_VOID = IS_SAME<UNIT1 ,void> ;
-
-template <class UNIT1>
 using IS_NULL = IS_SAME<UNIT1 ,typeof (NULL)> ;
 
 template <class UNIT1>
@@ -650,6 +659,9 @@ using IS_BASIC = ENUM_ANY<
 	IS_STR<UNIT1> ,
 	IS_BYTE<UNIT1> ,
 	IS_NULL<UNIT1>> ;
+
+template <class UNIT1>
+using IS_VOID = IS_SAME<UNIT1 ,void> ;
 
 template <class UNIT1>
 using IS_PLACEHOLDER = IS_EXTEND<UNIT1 ,typeof (PH0)> ;
@@ -1489,7 +1501,7 @@ struct FUNCTION_operator_cabi {
 		require (ENUM_EQUAL<ALIGN_OF<R2X> ,ALIGN_OF<FLAG>>) ;
 		require (IS_ZEROIZE<FLAG>) ;
 		FLAG ret = ZERO ;
-		static const R2X tmp ;
+		R2X tmp ;
 		unsafe_deptr (unsafe_deptr (ret).mStorage) = unsafe_deptr (unsafe_deptr (tmp).mStorage) ;
 		barrier () ;
 		return move (ret) ;
@@ -2189,12 +2201,8 @@ trait SLICE_HELP<UNIT1 ,REQUIRE<IS_STR<UNIT1>>> {
 		explicit Slice (XREF<ARG1> id ,XREF<ARGS>...texts) {
 			using R1X = ENUM_INC<ENUM_SUM<ENUM_DEC<ENUM_DIV<SIZE_OF<REMOVE_ALL<ARGS>> ,SIZE_OF<UNIT1>>>...>> ;
 			require (ENUM_COMPR_LTEQ<R1X ,MAX_SLICE_SIZE>) ;
-#ifndef __CSC_COMPILER_GNUC__
 			using R2X = typename SLICE_IMPLHOLDER_HELP<UNIT1 ,R1X ,ALWAYS>::ImplHolder ;
-			mPointer = memorize ([&] () {
-				return RC<Holder>::make (TYPEAS<R2X>::id ,id ,texts...) ;
-			}) ;
-#endif
+			mPointer = RC<Holder>::make (TYPEAS<R2X>::id ,id ,texts...) ;
 		}
 
 		imports CREF<Slice> nullopt () {
@@ -2316,6 +2324,8 @@ trait SLICE_IMPLHOLDER_HELP<UNIT1 ,SIZE ,ALWAYS> {
 		template <class ARG1 ,class...ARGS>
 		void template_write (CREF<INDEX> pos ,XREF<ARG1> text1 ,XREF<ARGS>...texts) {
 			using R1X = REMOVE_ALL<ARG1> ;
+			require (IS_STORAGE<R1X>) ;
+			require (IS_STR<typeof (text1[0])>) ;
 			using R2X = ENUM_DEC<ENUM_DIV<SIZE_OF<R1X> ,SIZE_OF<UNIT1>>> ;
 			assert (pos + R2X::value < SIZE::value) ;
 			for (auto &&i : range (0 ,R2X::value))
@@ -2328,6 +2338,173 @@ trait SLICE_IMPLHOLDER_HELP<UNIT1 ,SIZE ,ALWAYS> {
 
 template <class UNIT1>
 using Slice = typename U::SLICE_HELP<UNIT1 ,ALWAYS>::Slice ;
+
+namespace U {
+template <class...>
+trait FUNCTION_operator_name_HELP ;
+
+template <>
+trait FUNCTION_operator_name_HELP<BOOL ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"BOOL") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<VAR32 ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"VAR32") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<VAR64 ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"VAR64") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<SINGLE ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"SINGLE") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<DOUBLE ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"DOUBLE") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<STRA ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"STRA") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<STRW ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"STRW") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<BYTE ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"BYTE") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<WORD ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"WORD") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<CHAR ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"CHAR") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<FEAT ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"FEAT") ;
+		}
+	} ;
+} ;
+
+template <>
+trait FUNCTION_operator_name_HELP<MEGA ,ALWAYS> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"MEGA") ;
+		}
+	} ;
+} ;
+
+template <class UNIT1>
+trait FUNCTION_operator_name_HELP<UNIT1 ,IS_NULL<UNIT1>> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"NULL") ;
+		}
+	} ;
+} ;
+
+template <class UNIT1>
+trait FUNCTION_operator_name_HELP<UNIT1 ,IS_VOID<UNIT1>> {
+	struct FUNCTION_operator_name {
+		inline Slice<STR> operator() () const {
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"void") ;
+		}
+	} ;
+} ;
+
+template <class UNIT1>
+trait FUNCTION_operator_name_HELP<UNIT1 ,IS_CLASS<UNIT1>> {
+	struct FUNCTION_operator_name {
+		imports STR cvt_hex_str (const VAR &v) {
+			assert (between (v ,0 ,16)) ;
+			if (v < 10)
+				return STR (VAR ('0') + v) ;
+			return STR (VAR ('A') + v) ;
+		}
+
+		inline Slice<STR> operator() () const {
+			using R1X = ENUM_MUL<SIZE_OF<FLAG> ,ENUMAS<VAR ,U::ENUMID<(2)>>> ;
+			DEF<STR[ENUM_INC<R1X>::value]> tmp ;
+			const auto r1x = CHAR (operator_cabi (TYPEAS<UNIT1>::id)) ;
+			for (auto &&i : range (0 ,R1X::value)) {
+				const auto r2x = VAR (CHAR (r1x >> (4 * i)) & CHAR (0X0F)) ;
+				tmp[i] = cvt_hex_str (r2x) ;
+			}
+			tmp[R1X::value] = 0 ;
+			return Slice<STR> (TYPEAS<struct anonymous>::id ,"clazz'" ,tmp ,"'") ;
+		}
+	} ;
+} ;
+} ;
+
+struct FUNCTION_operator_name {
+	template <class ARG1>
+	inline Slice<STR> operator() (XREF<ARG1> id) const {
+		using R1X = REMOVE_ALL<ARG1> ;
+		using R2X = typename U::FUNCTION_operator_name_HELP<R1X ,ALWAYS>::FUNCTION_operator_name ;
+		static constexpr auto M_INVOKE = R2X () ;
+		return M_INVOKE () ;
+	}
+} ;
+
+static constexpr auto operator_name = FUNCTION_operator_name () ;
 
 namespace U {
 template <class...>
@@ -2389,15 +2566,7 @@ trait CLAZZ_HELP<ALWAYS> {
 		}
 
 		BOOL equal (CREF<Clazz> that) const {
-			if (type_cabi () == that.type_cabi ())
-				return TRUE ;
-			if (type_size () != that.type_size ())
-				return FALSE ;
-			if (type_align () != that.type_align ())
-				return FALSE ;
-			if (type_name () != that.type_name ())
-				return FALSE ;
-			return TRUE ;
+			return type_cabi () == that.type_cabi () ;
 		}
 
 		inline BOOL operator== (CREF<Clazz> that) const {
@@ -2409,18 +2578,13 @@ trait CLAZZ_HELP<ALWAYS> {
 		}
 
 		FLAG compr (CREF<Clazz> that) const {
-			if (type_cabi () == that.type_cabi ())
-				return ZERO ;
-			const auto r1x = operator_compr (type_name () ,that.type_name ()) ;
-			if (r1x != ZERO)
+			const auto r1x = operator_compr (type_cabi () ,that.type_cabi ()) ;
+			if (r1x == ZERO)
 				return r1x ;
-			const auto r2x = operator_compr (type_size () ,that.type_size ()) ;
+			const auto r2x = operator_compr (type_name () ,that.type_name ()) ;
 			if (r2x != ZERO)
 				return r2x ;
-			const auto r3x = operator_compr (type_align () ,that.type_align ()) ;
-			if (r3x != ZERO)
-				return r3x ;
-			return ZERO ;
+			return r1x ;
 		}
 
 		inline BOOL operator< (CREF<Clazz> that) const {
@@ -2466,8 +2630,7 @@ trait CLAZZ_IMPLHOLDER_HELP<UUID ,ALWAYS> {
 		}
 
 		Slice<STR> type_name () const override {
-			const auto r1x = typeid (UUID).name () ;
-			return Slice<STR> (TYPEAS<struct anonymous>::id ,r1x) ;
+			return operator_name (TYPEAS<UUID>::id) ;
 		}
 	} ;
 } ;
@@ -2532,7 +2695,7 @@ trait EXCEPTION_HELP<ALWAYS> {
 
 template <class UNIT1>
 trait EXCEPTION_IMPLHOLDER_HELP<UNIT1 ,ALWAYS> {
-	using Holder = typename EXCEPTION_HELP<UNIT1 ,ALWAYS>::ExceptionHolder ;
+	using Holder = typename EXCEPTION_HELP<ALWAYS>::ExceptionHolder ;
 
 	class ImplHolder :public Holder {
 	private:

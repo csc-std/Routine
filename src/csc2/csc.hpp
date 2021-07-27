@@ -112,6 +112,18 @@
 #include <cstdlib>
 #include "end.h"
 
+#ifdef _HAS_CXX17
+#if _HAS_CXX17
+#define __CSC_CXX_LATEST__
+#endif
+#endif
+
+#ifdef __CSC_COMPILER_GNUC__
+namespace std {
+using ::max_align_t ;
+} ;
+#endif
+
 #ifndef __macro_stringize
 #define __macro_stringize_impl(...) #__VA_ARGS__
 #define __macro_stringize(...) __macro_stringize_impl (__VA_ARGS__)

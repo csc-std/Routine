@@ -1,7 +1,5 @@
 ﻿#include "util.h"
 
-#define slice(...) CSC::Slice<CSC::STR> (CSC::TYPEAS<struct anonymous>::id ,__VA_ARGS__)
-
 namespace UNITTEST {
 imports Auto get_int () {
 	return VAR32 (2) ;
@@ -12,7 +10,7 @@ imports Auto get_float () {
 }
 
 imports Auto get_string () {
-	return slice ("test" ,"2") ;
+	return Slice<STR> ("test" ,"2") ;
 }
 
 struct A :public Interface {
@@ -26,7 +24,8 @@ struct ImplA :public A {
 		const auto r2x = SINGLE (get_float ().cast (TYPEAS<SINGLE>::id)) ;
 		assert (r2x == SINGLE (3.1)) ;
 		const auto r3x = Slice<STR> (get_string ().cast (TYPEAS<Slice<STR>>::id)) ;
-		assert (r3x == slice ("test" ,"2")) ;
+		assert (r3x == Slice<STR> ("test" ,"2")) ;
+		Clazz (TYPEAS<int>::id).type_name () ;
 	}
 } ;
 } ;
